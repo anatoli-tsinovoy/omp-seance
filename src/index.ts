@@ -6,7 +6,7 @@ import type {
 } from "@oh-my-pi/pi-coding-agent";
 import toolDescription from "./prompts/tool.md" with { type: "text" };
 import { SeanceRuntime, type SeanceSummary } from "./runtime.ts";
-import { pickSourceSession } from "./picker.ts";
+import { pickConsultationOptions, pickSourceSession } from "./picker.ts";
 
 interface RuntimeSlot {
 	runtime: SeanceRuntime;
@@ -93,6 +93,7 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 				.describe("Non-current live session ID, saved-session ID or unambiguous prefix, or JSONL path."),
 			name: api.zod.string().describe("Optional label for the new child.").optional(),
 			model: api.zod.string().describe("Optional exact provider/model ID override.").optional(),
+			question: api.zod.string().describe("Optional initial consultation question; non-blank starts the child, blank leaves it idle.").optional(),
 		})
 		.strict();
 
@@ -115,6 +116,7 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 					sourceSession: params.sourceSession,
 					...(params.name === undefined ? {} : { name: params.name }),
 					...(params.model === undefined ? {} : { model: params.model }),
+					...(params.question === undefined ? {} : { question: params.question }),
 				},
 				operationSignal,
 			);
@@ -141,6 +143,7 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 			const slot = await slotFor(ctx);
 			const operationSignal = slot.controller.signal;
 			let sourceSession = args.trim();
+			let consultationOptions: { model?: string; question?: string } = {};
 			if (sourceSession.length === 0) {
 				if (!isCurrentSlot(slot, ctx, currentSlot)) return;
 				if (!ctx.hasUI || ctx.mode !== "tui") {
@@ -162,17 +165,33 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 					return;
 				}
 			}
+			if (ctx.hasUI && ctx.mode === "tui") {
+				if (!isCurrentSlot(slot, ctx, currentSlot) || operationSignal.aborted) return;
+				try {
+					const selected = await pickConsultationOptions(api, ctx, sourceSession, operationSignal);
+					if (!isCurrentSlot(slot, ctx, currentSlot) || operationSignal.aborted) return;
+					if (selected === undefined) return;
+					consultationOptions = selected;
+				} catch (error) {
+					if (isCurrentSlot(slot, ctx, currentSlot) && !operationSignal.aborted) {
+						ctx.ui.notify(`Could not choose consultation options: ${errorMessage(error)}`, "error");
+					}
+					return;
+				}
+			}
 			try {
-				const child = await slot.runtime.spawn(ctx, { sourceSession }, operationSignal);
+				const child = await slot.runtime.spawn(ctx, { sourceSession, ...consultationOptions }, operationSignal);
 				if (!isCurrentSlot(slot, ctx, currentSlot)) {
 					await discardSpawnedChild(slot, ctx, currentSlot, child.id);
 					return;
 				}
+				const question = consultationOptions.question;
+				const attachment = question?.trim() ? { ...child, question } : child;
 				try {
 					api.sendMessage(
 						{
 							customType: "omp-seance-attachment",
-							content: serialize(child),
+							content: serialize(attachment),
 							display: true,
 							attribution: "agent",
 							details: child,

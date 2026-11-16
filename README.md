@@ -15,19 +15,23 @@ omp plugin install github:anatoli-tsinovoy/omp-seance
 
 ## Use
 
-With no arguments in the interactive TUI, `/seance` opens the native searchable session picker, scoped to the current folder. Use the arrow keys and Enter to select a source, Tab to search all projects, or Esc to cancel. The selected session is forked into an idle consultant, not resumed; the current session remains active, and selecting or attaching alone does not invoke a model. For advanced or automated use, `/seance <id-or-JSONL-path>` still attaches an idle consultant; the entire argument is accepted as a path, including spaces. There is no `current` alias, and the current session cannot be used as a source.
+1. **Choose a source.** With no arguments, `/seance` opens the native searchable session picker in the current folder. Use arrows and Enter to select, Tab to search all projects, or Esc to cancel.
+2. **Choose a model.** The native selector defaults to the current main model; the source's recorded historical model is offered when available, and other available models are searchable. The current session and main model remain unchanged.
+3. **Ask or attach.** The native multiline question editor submits with Ctrl+Q or Ctrl+Enter. A blank question attaches an idle consultant; canceling any dialog creates no child.
+
+In the TUI, `/seance <id|prefix|liveid|JSONL-path>` skips only the source picker; model selection and the question editor still appear. Outside the interactive TUI, an explicit source argument attaches an idle consultant without prompting.
 
 Loading the plugin advertises the `seance` tool and its consultation instructions to the main model through the tool catalog; it does not inject a separate system-prompt paragraph.
 
-The tool is import-only: `sourceSession` is required, while `name` and `model` are optional. Each call returns metadata for an idle child and does not invoke the consultant model.
+The `seance` tool requires `sourceSession`; `name`, `model`, and `question` are optional. A nonblank `question` starts an initial parent-attributed IRC consultation, while an omitted or whitespace-only question leaves the child idle. The tool returns child metadata without waiting for inference; use `wait` for the initial answer.
 
-After importing, send each question with the ordinary `write` tool to `agent://<id>`; the consultant completes that IRC turn by terminally yielding its answer or an error, and the wake-turn monitor routes completion back to its sender. Use `wait` for completion. Yield ends only that turn; the child remains attached and available, so reuse the same ID for follow-ups.
+For follow-ups, send each question with the ordinary `write` tool to `agent://<id>` and use `wait` for completion. Yield ends only that turn; the child remains attached and available, so reuse the same ID for follow-ups.
 
 The consultant prompt requires `yield`, but OMP's IRC monitor does not enforce it with reminders: if the model stops with plain text instead, the monitor forwards that text. Unlike initial task/scout runs, IRC follow-ups have no missing-yield retry ladder. This extension preserves that native fallback rather than adding its own orchestration.
 
 The source can be a JSONL path (including `~` paths), a known live registry ID, or a saved session ID/prefix. Saved IDs are resolved in the current project and then globally; ambiguous or missing sources are rejected. The caller and source must both have persistent session files. Current-session sources are rejected even when specified by ID or path. A source is also rejected if its canonical artifact directory contains the fork destination; this includes self and ancestor sources, with symlink aliases accounted for, to prevent copying an artifact tree into itself.
 
-Consultants use the caller's current model by default. Set `model` to select an exact available provider/model identifier; an unavailable override does not silently fall back.
+Tool callers use the caller's current model by default. Set `model` to select an exact available provider/model identifier; an unavailable override does not silently fall back. In the TUI, the source's recorded historical model is also offered when available; if unavailable, the dialog title identifies it rather than silently substituting another model.
 
 Relative file paths are resolved in the historical session's recorded working directory, not the caller's project. If that directory no longer exists, consultation uses an empty fallback directory and reports `sourceCwdAvailable: false`; the consultant is told not to treat that empty directory as evidence about the original project.
 

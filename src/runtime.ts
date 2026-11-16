@@ -56,7 +56,7 @@ export class SeanceRuntime {
 
 	async spawn(
 		ctx: ExtensionContext,
-		options: { sourceSession: string; name?: string; model?: string },
+		options: { sourceSession: string; name?: string; model?: string; question?: string },
 		signal?: AbortSignal,
 	): Promise<SeanceSummary> {
 		this.#assertOwner(ctx);
@@ -71,10 +71,11 @@ export class SeanceRuntime {
 
 	async #spawn(
 		ctx: ExtensionContext,
-		options: { sourceSession: string; name?: string; model?: string },
+		options: { sourceSession: string; name?: string; model?: string; question?: string },
 		signal?: AbortSignal,
 	): Promise<SeanceSummary> {
 		signal?.throwIfAborted();
+		const question = options.question?.trim() ? options.question : undefined;
 		const artifacts = ctx.sessionManager.getArtifactsDir();
 		if (!ctx.sessionManager.getSessionFile() || !artifacts) throw new Error("Seance requires a persistent parent session.");
 		const source = await resolveSourceSession(this.#sdk, ctx, options.sourceSession);
@@ -197,8 +198,22 @@ export class SeanceRuntime {
 				unsubscribe: statusUnsubscribe,
 			};
 			this.#children.set(id, child);
+			if (question !== undefined) {
+				signal?.throwIfAborted();
+				this.#assertOwner(ctx);
+				await session.deliverIrcMessage({
+					id: crypto.randomUUID(),
+					from: ctx.agent.id,
+					to: id,
+					body: question,
+					ts: Date.now(),
+				});
+				signal?.throwIfAborted();
+				this.#assertOwner(ctx);
+			}
 			return this.#summary(child);
 		} catch (error) {
+			this.#children.delete(id);
 			if (session) {
 				session.setIrcWakeTurnObserver(undefined);
 				unsubscribe?.();

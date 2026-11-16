@@ -4,11 +4,12 @@
 
 ### Breaking Changes
 
-- Replaced the action-based `seance` schema with an import-only contract: `sourceSession` is required; `name` and `model` are optional.
+- Removed the legacy action-based operations; `seance` is spawn-only and requires `sourceSession`, with optional `name`, `model`, and `question`.
 
 ### Added
 
-- Add import-only historical-session consultations with completed replies routed back to their sender.
+- Start a consultation immediately with an optional `question`; omit it or leave it blank to attach an idle child.
+- Interactive `/seance` adds native model selection and a multiline question editor; Ctrl+Q or Ctrl+Enter submits, blank attaches idle, and canceling any dialog does not fork.
 
 ### Changed
 
@@ -16,6 +17,6 @@
 
 ### Fixed
 
-- Open the native searchable session picker for `/seance` with no arguments, scoped to the current folder with Tab for all projects; selection forks without resuming the source, switching the main session, or invoking a model.
+- The no-argument `/seance` picker remains current-folder scoped (Tab searches all projects); source selection does not resume the source or switch the parent, and only a nonblank question invokes the consultant model.
 
 - Resolve relative file reads in the historical source project; disclose an unavailable source directory instead of reading from the caller's project.
