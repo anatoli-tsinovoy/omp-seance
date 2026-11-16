@@ -53,9 +53,21 @@ test("cross-project consultants read the source workspace and never substitute c
 				}
 				expect(tools.sort()).toEqual(["glob", "grep", "read"]);
 				expect(JSON.stringify(body.messages)).toContain("HISTORICAL_CONTEXT");
-				if (childStep++ === 0) return reply(undefined, { name: "read", args: { path: "evidence.txt" } });
-				if (available) expect(text).toContain("SOURCE_PROJECT_EVIDENCE");
+				const step = childStep++;
+				if (available) {
+					if (step === 0) return reply(undefined, { name: "write", args: { path: path.join(original, "evidence.txt"), content: "CORRUPTED" } });
+					if (step === 1) {
+						expect(await Bun.file(path.join(original, "evidence.txt")).text()).toBe("SOURCE_PROJECT_EVIDENCE");
+						return reply(undefined, { name: "read", args: { path: "artifact://7" } });
+					}
+					if (step === 2) {
+						expect(text).toContain("COPIED_SOURCE_ARTIFACT");
+						return reply(undefined, { name: "read", args: { path: "evidence.txt" } });
+					}
+					expect(text).toContain("SOURCE_PROJECT_EVIDENCE");
+				}
 				else {
+					if (step === 0) return reply(undefined, { name: "read", args: { path: "evidence.txt" } });
 					expect(text).toMatch(/ENOENT|not found|does not exist/i);
 					expect(JSON.stringify(body.messages)).toContain("sourceCwdAvailable");
 				}
@@ -81,6 +93,7 @@ test("cross-project consultants read the source workspace and never substitute c
 				{ type: "message", id: "source-message", parentId: null, timestamp, message: { role: "user", content: [{ type: "text", text: "HISTORICAL_CONTEXT" }], timestamp: Date.now() } },
 			].map(entry => JSON.stringify(entry)).join("\n") + "\n";
 			await Bun.write(sourceFile, source);
+			await Bun.write(path.join(sourceFile.slice(0, -6), "7.read.log"), "COPIED_SOURCE_ARTIFACT");
 			const subprocess = Bun.spawn([
 				process.execPath, path.resolve(import.meta.dir, "../node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts"),
 				"--cwd", caller, "--mode", "json", "--print", "--model", "seance-fixture/fixture",
@@ -92,7 +105,7 @@ test("cross-project consultants read the source workspace and never substitute c
 				expect({ exitCode, stderr: exitCode ? stderr : "" }).toEqual({ exitCode: 0, stderr: "" });
 				expect(failures).toEqual([]);
 				expect(stdout).toContain("CROSS_PROJECT_PASS");
-				expect({ parentStep, childStep }).toEqual({ parentStep: 2, childStep: 2 });
+				expect({ parentStep, childStep }).toEqual({ parentStep: 2, childStep: available ? 4 : 2 });
 				expect(await Bun.file(sourceFile).text()).toBe(source);
 			} finally {
 				subprocess.kill();
