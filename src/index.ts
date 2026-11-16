@@ -6,6 +6,7 @@ import type {
 } from "@oh-my-pi/pi-coding-agent";
 import toolDescription from "./prompts/tool.md" with { type: "text" };
 import { SeanceRuntime, type SeanceReply, type SeanceSummary } from "./runtime.ts";
+import { pickSourceSession } from "./picker.ts";
 
 interface RuntimeSlot {
 	runtime: SeanceRuntime;
@@ -232,28 +233,25 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 			let sourceSession = args.trim();
 			if (sourceSession.length === 0) {
 				if (!isCurrentSlot(slot, ctx, currentSlot)) return;
-				if (!ctx.hasUI) {
-					ctx.ui.notify("Use /seance <non-current session ID or JSONL path> outside the interactive UI.", "error");
+				if (!ctx.hasUI || ctx.mode !== "tui") {
+					ctx.ui.notify(
+						"Use /seance <non-current session ID or JSONL path> outside the interactive TUI.",
+						"error",
+					);
 					return;
 				}
-				let input: string | undefined;
 				try {
-					input = await ctx.ui.input("Non-current session ID or JSONL path");
+					const selected = await pickSourceSession(api, ctx, operationSignal);
+					if (!isCurrentSlot(slot, ctx, currentSlot)) return;
+					if (selected === undefined) return;
+					sourceSession = selected;
 				} catch (error) {
 					if (isCurrentSlot(slot, ctx, currentSlot)) {
 						ctx.ui.notify(`Could not choose a session: ${errorMessage(error)}`, "error");
 					}
 					return;
 				}
-				if (!isCurrentSlot(slot, ctx, currentSlot)) return;
-				if (input === undefined) return;
-				sourceSession = input.trim();
 			}
-			if (sourceSession.length === 0) {
-				ctx.ui.notify("Provide a non-current session ID or JSONL path to attach.", "error");
-				return;
-			}
-
 			try {
 				const child = await slot.runtime.spawn(ctx, { sourceSession }, operationSignal);
 				if (!isCurrentSlot(slot, ctx, currentSlot)) {

@@ -4,7 +4,7 @@ Use `seance` to consult saved session context in a separate read-only child with
 - Add an initial `question` to receive a synchronous reply while retaining the child, or omit it to attach an idle child.
 - Use `ask` for follow-ups to an attached child by its returned `id`; NEVER resume it through `task`.
 - Use `list` to inspect attached children and `close` to end one.
-- `/seance` attaches an idle child; its entire argument is one source value, including spaces. With no argument, interactive UI prompts for a source.
+- Human `/seance` with no arguments opens the native searchable session picker: current-folder scope, Tab for all projects, arrows/Enter to select, Esc to cancel. Selection forks an idle child; it does not resume the source, switch the parent session, or invoke a model. Tool callers still pass an ID or JSONL path as `spawn.sourceSession`.
 - Omit `model` to inherit the caller's model; overrides require an exact provider/model pair.
 
 Children are read-only. Ask focused questions and reuse the same child ID for follow-ups.

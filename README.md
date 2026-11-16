@@ -15,7 +15,7 @@ omp plugin install github:anatoli-tsinovoy/omp-seance
 
 ## Use
 
-`/seance` with no arguments opens input when the UI is available. `/seance <id-or-JSONL-path>` attaches an idle consultant; the full argument is accepted as a path, including spaces. The slash command only attaches a consultant and does not invoke a model. There is no `current` alias, and the current session cannot be used as a source.
+With no arguments in the interactive TUI, `/seance` opens the native searchable session picker, scoped to the current folder. Use the arrow keys and Enter to select a source, Tab to search all projects, or Esc to cancel. The selected session is forked into an idle consultant, not resumed; the current session remains active, and selecting or attaching alone does not invoke a model. For advanced or automated use, `/seance <id-or-JSONL-path>` still attaches an idle consultant; the entire argument is accepted as a path, including spaces. There is no `current` alias, and the current session cannot be used as a source.
 
 Loading the plugin advertises the `seance` tool and its consultation instructions to the main model through the tool catalog; it does not inject a separate system-prompt paragraph. The model can use these actions:
 
