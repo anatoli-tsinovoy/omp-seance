@@ -267,13 +267,7 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 							content: serialize(child),
 							display: true,
 							attribution: "agent",
-							details: {
-								id: child.id,
-								sourceSession: child.sourceSession,
-								sessionFile: child.sessionFile,
-								status: child.status,
-								model: child.model,
-							},
+							details: child,
 						},
 						{ triggerTurn: false },
 					);

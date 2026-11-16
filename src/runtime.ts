@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionManager } from "@oh-my-pi/pi-coding-agent";
 import consultantPrompt from "./prompts/consultant.md" with { type: "text" };
@@ -11,6 +12,9 @@ export interface SeanceSummary {
 	sessionFile: string;
 	status: "idle" | "running" | "closed";
 	model: string;
+	cwd: string;
+	sourceCwd: string;
+	sourceCwdAvailable: boolean;
 }
 
 export interface SeanceReply extends SeanceSummary {
@@ -75,7 +79,7 @@ export class SeanceRuntime {
 		let id: string;
 		do { id = `Seance${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`; } while (registry.get(id));
 		const sessionFile = path.join(artifacts, `${id}.jsonl`);
-		await assertSafeForkDestination(source, sessionFile);
+		await assertSafeForkDestination(source.file, sessionFile);
 		const selector = options.model?.trim();
 		const model = selector
 			? ctx.models.list().find(candidate => `${candidate.provider}/${candidate.id}` === selector)
@@ -83,10 +87,18 @@ export class SeanceRuntime {
 		if (!model) throw new Error(selector ? `Model "${selector}" is not an available exact provider/model ID.` : "Select a model in the parent session first.");
 		signal?.throwIfAborted();
 		this.#assertOwner(ctx);
+		const sourceCwdAvailable = path.isAbsolute(source.cwd) &&
+			await fs.stat(source.cwd).then(stat => stat.isDirectory(), () => false);
+		let cwd = source.cwd;
 		let manager: SessionManager | undefined;
 		let session: AgentSession | undefined;
 		try {
-			manager = await this.#sdk.SessionManager.forkFrom(source, ctx.cwd, artifacts, undefined, {
+			if (!sourceCwdAvailable) {
+				const childArtifacts = sessionFile.slice(0, -6);
+				await fs.mkdir(childArtifacts, { recursive: true });
+				cwd = await fs.mkdtemp(path.join(childArtifacts, ".unavailable-source-"));
+			}
+			manager = await this.#sdk.SessionManager.forkFrom(source.file, cwd, artifacts, undefined, {
 				sessionFile,
 				copyArtifacts: true,
 				suppressBreadcrumb: true,
@@ -97,12 +109,21 @@ export class SeanceRuntime {
 			for (const entry of manager.getEntries()) {
 				if (entry.type === "session_init") entry.isolated = true;
 			}
+			manager.appendMessage({
+				role: "user",
+				content: [{
+					type: "text", text: JSON.stringify({
+						seanceSource: { file: source.file, recordedCwd: source.cwd, workingDirectory: cwd, sourceCwdAvailable },
+					})
+				}],
+				timestamp: Date.now(),
+			});
 			await manager.rewriteEntries();
 			await manager.setTaskPromptCacheKey(crypto.randomUUID());
 			signal?.throwIfAborted();
 			this.#assertOwner(ctx);
 			({ session } = await this.#sdk.createAgentSession({
-				cwd: ctx.cwd,
+				cwd,
 				sessionManager: manager,
 				model,
 				modelRegistry: ctx.modelRegistry,
@@ -133,7 +154,10 @@ export class SeanceRuntime {
 			registry.setHistory(id, { agent: "seance", readOnly: true, resolvedModel }, sessionFile);
 			registry.setStatus(id, "idle", session);
 			const child: Consultant = {
-				summary: { id, sourceSession: source, sessionFile, status: "idle", model: resolvedModel },
+				summary: {
+					id, sourceSession: source.file, sessionFile, status: "idle", model: resolvedModel,
+					cwd, sourceCwd: source.cwd, sourceCwdAvailable
+				},
 				session, unsubscribe, busy: false,
 			};
 			this.#children.set(id, child);

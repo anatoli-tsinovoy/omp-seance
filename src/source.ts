@@ -36,7 +36,12 @@ function selectSession(sessions: SessionInfo[], query: string): string | undefin
 	return files[0];
 }
 
-export async function resolveSourceSession(sdk: SDK, ctx: ExtensionContext, value: string): Promise<string> {
+export interface SourceSession {
+	file: string;
+	cwd: string;
+}
+
+export async function resolveSourceSession(sdk: SDK, ctx: ExtensionContext, value: string): Promise<SourceSession> {
 	let query = value.trim();
 	if ((query.startsWith('"') && query.endsWith('"')) || (query.startsWith("'") && query.endsWith("'"))) {
 		query = query.slice(1, -1);
@@ -53,8 +58,9 @@ export async function resolveSourceSession(sdk: SDK, ctx: ExtensionContext, valu
 	}
 	if (!file) throw new Error(`Session "${query}" was not found. Provide its JSONL path.`);
 	const realFile = await fs.realpath(file);
-	if (!realFile.endsWith(".jsonl") || !(await sdk.readSessionInfo(realFile))) {
+	const info = realFile.endsWith(".jsonl") ? await sdk.readSessionInfo(realFile) : undefined;
+	if (!info) {
 		throw new Error(`Not a readable OMP JSONL session: ${file}`);
 	}
-	return realFile;
+	return { file: realFile, cwd: info.cwd };
 }

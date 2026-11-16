@@ -28,6 +28,8 @@ A source can be a JSONL path (including `~` paths), a known live registry ID, or
 
 Consultants use the caller's current model by default. Set `model` on `spawn` to select an exact available provider/model identifier; an unavailable override does not silently fall back. Follow-up is handled by `seance ask`; this extension does not resume the standard `task` workflow.
 
+Relative file paths are resolved in the historical session's recorded working directory, not the caller's project. If that directory no longer exists, consultation uses an empty fallback directory and reports `sourceCwdAvailable: false`; the consultant is told not to treat that empty directory as evidence about the original project.
+
 ## Isolation and storage
 
 The consultant is given only the read-only `read`, `grep`, and `glob` tools. It does not inherit ambient extensions, custom tools, hooks, MCP or LSP access, context files, skills, or rules. This is not an operating-system sandbox, and file reads are not confined to the source session or project: the consultant can read files available through OMP's file access.
