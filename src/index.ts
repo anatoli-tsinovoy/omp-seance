@@ -5,7 +5,7 @@ import type {
 	ToolDefinition,
 } from "@oh-my-pi/pi-coding-agent";
 import toolDescription from "./prompts/tool.md" with { type: "text" };
-import { SeanceRuntime, type SeanceReply, type SeanceSummary } from "./runtime.ts";
+import { SeanceRuntime, type SeanceSummary } from "./runtime.ts";
 import { pickSourceSession } from "./picker.ts";
 
 interface RuntimeSlot {
@@ -14,24 +14,6 @@ interface RuntimeSlot {
 	controller: AbortController;
 	disposal: Promise<void> | undefined;
 }
-
-type SeanceAction = "spawn" | "ask" | "list" | "close";
-type OptionalField = "sourceSession" | "name" | "model" | "id" | "question";
-
-interface SeanceActionParams {
-	action: SeanceAction;
-	sourceSession?: string;
-	name?: string;
-	model?: string;
-	id?: string;
-	question?: string;
-}
-
-type SeanceToolDetails =
-	| { action: "spawn"; child: SeanceSummary; reply?: string }
-	| { action: "ask"; child: SeanceSummary; reply: string }
-	| { action: "list"; children: SeanceSummary[] }
-	| { action: "close"; child: SeanceSummary };
 
 function createSlot(api: ExtensionAPI, ownerSessionId?: string): RuntimeSlot {
 	return {
@@ -53,22 +35,6 @@ function serialize(value: unknown): string {
 	const text = JSON.stringify(value, null, 2);
 	if (text === undefined) throw new Error("Could not serialize the Seance result.");
 	return text;
-}
-
-function requiredValue(action: string, field: string, value: string | undefined): string {
-	if (value === undefined || value.trim().length === 0) {
-		throw new Error(`seance action "${action}" requires a non-empty "${field}".`);
-	}
-	return value;
-}
-
-function rejectFields(
-	params: SeanceActionParams,
-	action: string,
-	fields: readonly OptionalField[],
-): void {
-	const field = fields.find(candidate => params[candidate] !== undefined);
-	if (field !== undefined) throw new Error(`seance action "${action}" does not accept "${field}".`);
 }
 
 function errorMessage(error: unknown): string {
@@ -121,25 +87,16 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 
 	const parameters = api.zod
 		.object({
-			action: api.zod.enum(["spawn", "ask", "list", "close"]).describe("Operation to perform."),
 			sourceSession: api.zod
 				.string()
-				.describe("Required for spawn: non-current live session ID, saved-session ID or unambiguous prefix, or JSONL path.")
-				.optional(),
-			name: api.zod.string().describe("Optional label for a newly spawned child.").optional(),
-			model: api.zod
-				.string()
-				.describe("Optional provider/model ID override for a newly spawned child.")
-				.optional(),
-			id: api.zod.string().describe("Required for ask or close: the attached child ID.").optional(),
-			question: api.zod
-				.string()
-				.describe("Required for ask; optional initial question for spawn.")
-				.optional(),
+				.refine(value => value.trim().length > 0, "A non-empty source session is required.")
+				.describe("Non-current live session ID, saved-session ID or unambiguous prefix, or JSONL path."),
+			name: api.zod.string().describe("Optional label for the new child.").optional(),
+			model: api.zod.string().describe("Optional exact provider/model ID override.").optional(),
 		})
 		.strict();
 
-	const tool: ToolDefinition<typeof parameters, SeanceToolDetails> = {
+	const tool: ToolDefinition<typeof parameters, SeanceSummary> = {
 		name: "seance",
 		label: "Seance",
 		description: toolDescription,
@@ -152,73 +109,26 @@ const seanceExtension: ExtensionFactory = (api: ExtensionAPI) => {
 				: slot.controller.signal;
 			assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
 
-			switch (params.action) {
-				case "spawn": {
-					rejectFields(params, "spawn", ["id"]);
-					const sourceSession = requiredValue("spawn", "sourceSession", params.sourceSession);
-					const question = params.question === undefined ? undefined : requiredValue("spawn", "question", params.question);
-					const child = await slot.runtime.spawn(
-						ctx,
-						{
-							sourceSession,
-							...(params.name === undefined ? {} : { name: params.name }),
-							...(params.model === undefined ? {} : { model: params.model }),
-						},
-						operationSignal,
-					);
-					try {
-						assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
-						if (question === undefined) {
-							return {
-								content: [{ type: "text", text: serialize(child) }],
-								details: { action: "spawn", child },
-							};
-						}
-						const answer = await slot.runtime.ask(ctx, child.id, question, operationSignal);
-						assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
-						const { reply, ...summary } = answer;
-						return {
-							content: [{ type: "text", text: serialize(answer) }],
-							details: { action: "spawn", child: summary, reply },
-						};
-					} catch (error) {
-						if (operationSignal.aborted || !isCurrentSlot(slot, ctx, currentSlot)) {
-							await discardSpawnedChild(slot, ctx, currentSlot, child.id);
-						}
-						throw error;
-					}
+			const child = await slot.runtime.spawn(
+				ctx,
+				{
+					sourceSession: params.sourceSession,
+					...(params.name === undefined ? {} : { name: params.name }),
+					...(params.model === undefined ? {} : { model: params.model }),
+				},
+				operationSignal,
+			);
+			try {
+				assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
+				return {
+					content: [{ type: "text", text: serialize(child) }],
+					details: child,
+				};
+			} catch (error) {
+				if (operationSignal.aborted || !isCurrentSlot(slot, ctx, currentSlot)) {
+					await discardSpawnedChild(slot, ctx, currentSlot, child.id);
 				}
-				case "ask": {
-					rejectFields(params, "ask", ["sourceSession", "name", "model"]);
-					const id = requiredValue("ask", "id", params.id);
-					const question = requiredValue("ask", "question", params.question);
-					const answer: SeanceReply = await slot.runtime.ask(ctx, id, question, operationSignal);
-					assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
-					const { reply, ...child } = answer;
-					return {
-						content: [{ type: "text", text: reply }],
-						details: { action: "ask", child, reply },
-					};
-				}
-				case "list": {
-					rejectFields(params, "list", ["sourceSession", "name", "model", "id", "question"]);
-					const children = slot.runtime.list(ctx);
-					assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
-					return {
-						content: [{ type: "text", text: serialize(children) }],
-						details: { action: "list", children },
-					};
-				}
-				case "close": {
-					rejectFields(params, "close", ["sourceSession", "name", "model", "question"]);
-					const id = requiredValue("close", "id", params.id);
-					const child = await slot.runtime.close(ctx, id);
-					assertCurrentSlot(slot, ctx, currentSlot, operationSignal);
-					return {
-						content: [{ type: "text", text: serialize(child) }],
-						details: { action: "close", child },
-					};
-				}
+				throw error;
 			}
 		},
 	};

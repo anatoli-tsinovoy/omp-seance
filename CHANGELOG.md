@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Replaced the action-based `seance` schema with an import-only contract: `sourceSession` is required; `name` and `model` are optional.
+
 ### Added
 
-- Add read-only historical-session consultants with synchronous reports and live Agent Hub attachments.
+- Add import-only historical-session consultations with completed replies routed back to their sender.
+
+### Changed
+
+- Historical-session consultations reuse OMP's scout wake-turn monitor with read-only filesystem tools. Send follow-ups with the ordinary `write agent://<id>` and `wait` flow.
 
 ### Fixed
 
