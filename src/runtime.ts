@@ -10,7 +10,7 @@ const consultantAgent: AgentDefinition = {
 	name: "seance",
 	description: "Read-only historical-session consultant.",
 	systemPrompt: consultantPrompt,
-	tools: ["read", "grep", "glob"],
+	tools: ["read", "grep", "glob", "yield"],
 	source: "bundled",
 };
 
@@ -153,7 +153,8 @@ export class SeanceRuntime {
 				taskDepth: ctx.agent.depth + 1,
 				systemPrompt: consultantPrompt,
 				restrictToolNames: true,
-				toolNames: ["read", "grep", "glob"],
+				toolNames: ["read", "grep", "glob", "yield"],
+				requireYieldTool: true,
 				enableMCP: false,
 				enableLsp: false,
 				disableExtensionDiscovery: true,
@@ -178,7 +179,7 @@ export class SeanceRuntime {
 				description: consultantAgent.description,
 				...(selector ? { modelOverride: selector } : {}),
 				modelRole: "default",
-				structured: false,
+				structured: true,
 				artifactsDir: artifacts,
 			});
 			const child: Consultant = {

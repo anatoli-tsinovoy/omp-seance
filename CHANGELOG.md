@@ -12,7 +12,7 @@
 
 ### Changed
 
-- Historical-session consultations reuse OMP's scout wake-turn monitor with read-only filesystem tools. Send follow-ups with the ordinary `write agent://<id>` and `wait` flow.
+- Historical-session consultations reuse OMP's scout wake-turn monitor with terminal `yield` completion per IRC turn; the child remains available for follow-ups sent with the ordinary `write agent://<id>` and `wait` flow.
 
 ### Fixed
 

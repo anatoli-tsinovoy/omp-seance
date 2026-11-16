@@ -100,7 +100,7 @@ test("cross-project consultants read the source workspace and never substitute c
 					throw new Error(`Unexpected parent request ${step}`);
 				}
 
-				expect(tools.sort()).toEqual(["glob", "grep", "read"]);
+				expect(tools.sort()).toEqual(["glob", "grep", "read", "yield"]);
 				expect(JSON.stringify(body.messages)).toContain("HISTORICAL_CONTEXT");
 				const step = childStep++;
 				if (available) {
@@ -118,13 +118,13 @@ test("cross-project consultants read the source workspace and never substitute c
 					if (step === 3) {
 						expect(text).toContain("SOURCE_PROJECT_EVIDENCE");
 						expect(text).not.toContain("CALLER_ONLY_EVIDENCE");
-						return reply(expectedFirstReply());
+						return reply(undefined, { name: "yield", args: { data: { answer: expectedFirstReply() } } });
 					}
 					if (step === 4) return reply(undefined, { name: "read", args: { path: "evidence.txt" } });
 					if (step === 5) {
 						expect(text).toContain("SOURCE_PROJECT_EVIDENCE");
 						expect(text).not.toContain("CALLER_ONLY_EVIDENCE");
-						return reply(expectedSecondReply());
+						return reply(undefined, { name: "yield", args: { data: { answer: expectedSecondReply() } } });
 					}
 				} else {
 					if (step === 0 || step === 2) return reply(undefined, { name: "read", args: { path: "evidence.txt" } });
@@ -132,7 +132,7 @@ test("cross-project consultants read the source workspace and never substitute c
 						expect(text).toMatch(/ENOENT|not found|does not exist/i);
 						expect(JSON.stringify(body.messages)).toContain("sourceCwdAvailable");
 						expect(text).not.toContain("CALLER_ONLY_EVIDENCE");
-						return reply(step === 1 ? expectedFirstReply() : expectedSecondReply());
+						return reply(undefined, { name: "yield", args: { data: { answer: step === 1 ? expectedFirstReply() : expectedSecondReply() } } });
 					}
 				}
 				throw new Error(`Unexpected child request ${step}`);
