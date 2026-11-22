@@ -180,7 +180,6 @@ export class SeanceRuntime {
 				description: consultantAgent.description,
 				...(selector ? { modelOverride: selector } : {}),
 				modelRole: "default",
-				structured: true,
 				artifactsDir: artifacts,
 			});
 			const child: Consultant = {

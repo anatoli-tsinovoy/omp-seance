@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Allow installation on OMP 19 and newer.
 - Historical-session consultations reuse OMP's scout wake-turn monitor with terminal `yield` completion per IRC turn; the child remains available for follow-ups sent with the ordinary `write agent://<id>` and `wait` flow.
 
 ### Fixed

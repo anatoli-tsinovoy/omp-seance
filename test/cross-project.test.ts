@@ -171,7 +171,7 @@ test("cross-project consultants read the source workspace and never substitute c
 					}
 					if (step === 1) {
 						expect(await Bun.file(path.join(original, "evidence.txt")).text()).toBe("SOURCE_PROJECT_EVIDENCE");
-						return reply(undefined, { name: "read", args: { path: "artifact://7" } });
+						return reply(undefined, { name: "read", args: { path: "local://7.log" } });
 					}
 					if (step === 2) {
 						expect(text).toContain("COPIED_SOURCE_ARTIFACT");
@@ -238,9 +238,9 @@ test("cross-project consultants read the source workspace and never substitute c
 				{ type: "message", id: "source-message", parentId: null, timestamp, message: { role: "user", content: [{ type: "text", text: "HISTORICAL_CONTEXT" }], timestamp: Date.now() } },
 			].map(entry => JSON.stringify(entry)).join("\n") + "\n";
 			await Bun.write(sourceFile, source);
-			await Bun.write(path.join(sourceFile.slice(0, -6), "7.read.log"), "COPIED_SOURCE_ARTIFACT");
+			await Bun.write(path.join(sourceFile.slice(0, -6), "local", "7.log"), "COPIED_SOURCE_ARTIFACT");
 			const subprocess = Bun.spawn([
-				process.execPath, path.resolve(import.meta.dir, "../node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts"),
+				process.execPath, path.resolve(import.meta.dir, "../node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"),
 				"--cwd", caller, "--session-dir", path.join(directory, `sessions-${scenario.label}`),
 				"--mode", "json", "--print", "--model", "seance-fixture/fixture",
 				"--tools", "seance,write,wait", "--no-lsp", "--no-extensions", "-e", path.resolve(import.meta.dir, "../src/index.ts"),
