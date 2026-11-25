@@ -1,7 +1,24 @@
 import * as path from "node:path";
-import type { ExtensionAPI, ExtensionContext, SessionInfo } from "@oh-my-pi/pi-coding-agent";
-import { SessionSelectorComponent } from "@oh-my-pi/pi-tui/overlays/session-selector";
+import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import type { SessionSelectorEntry } from "@oh-my-pi/pi-coding-agent/modes/view-model/overlays/session-selector";
 import { resolveSourceSession } from "./source.ts";
+
+function createSessionChoices(sessions: SessionSelectorEntry[]) {
+	const labels = new Set<string>();
+	const sessionsByLabel = new Map<string, SessionSelectorEntry>();
+	const options = sessions.map(session => {
+		const displayName = session.title?.trim() || session.firstMessage.replace(/\s+/g, " ").trim() || session.id;
+		const baseLabel = `${displayName} (${session.id})`;
+		let label = baseLabel;
+		if (labels.has(label)) label = `${baseLabel} - ${session.path}`;
+		let suffix = 2;
+		while (labels.has(label)) label = `${baseLabel} - ${session.path} (${suffix++})`;
+		labels.add(label);
+		sessionsByLabel.set(label, session);
+		return { label, description: `${session.cwd} - ${session.path}` };
+	});
+	return { options, sessionsByLabel };
+}
 
 export async function pickSourceSession(
 	api: ExtensionAPI,
@@ -13,46 +30,41 @@ export async function pickSourceSession(
 	const currentSessionId = ctx.sessionManager.getSessionId();
 	const currentSessionFile = ctx.sessionManager.getSessionFile();
 	const currentSessionPath = currentSessionFile ? path.resolve(currentSessionFile) : undefined;
-	const filterCurrentSession = (sessions: SessionInfo[]): SessionInfo[] =>
+	const filterCurrentSession = (sessions: SessionSelectorEntry[]): SessionSelectorEntry[] =>
 		sessions.filter(
 			session =>
 				session.id !== currentSessionId &&
 				(currentSessionPath === undefined || path.resolve(session.path) !== currentSessionPath),
 		);
 
+	const searchAllLabel = "Search all projects";
 	try {
 		signal?.throwIfAborted();
 		const folder = await api.pi.SessionManager.listForPicker(ctx.cwd);
-		signal?.throwIfAborted();
-		const result = await ctx.ui.custom<SessionInfo | undefined>(
-			(tui, _theme, _keybindings, done) => {
-				const picker = new SessionSelectorComponent(
-					filterCurrentSession(folder.sessions),
-					session => done(session),
-					() => done(undefined),
-					() => done(undefined),
-					{
-						title: "Select a session for Seance",
-						...(folder.complete === undefined
-							? {}
-							: { completeSessions: folder.complete.then(filterCurrentSession) }),
-						loadAllSessions: async () => {
-							const all = await api.pi.SessionManager.listAllForPicker();
-							return {
-								sessions: filterCurrentSession(all.sessions),
-								...(all.complete === undefined
-									? {}
-									: { complete: all.complete.then(filterCurrentSession) }),
-							};
-						},
-					},
-				);
-				picker.setOnRequestRender(() => tui.requestRender());
-				return picker;
-			},
-			{ overlay: true, ...(signal === undefined ? {} : { signal }) },
+		const folderSessions = folder.complete ? await folder.complete : folder.sessions;
+		const folderChoices = createSessionChoices(filterCurrentSession(folderSessions));
+		const choice = await ctx.ui.select(
+			"Select a session for Seance",
+			[
+				{ label: searchAllLabel, description: "Search sessions saved in every project" },
+				...folderChoices.options,
+			],
+			signal === undefined ? undefined : { signal },
 		);
-		return signal?.aborted ? undefined : result?.path;
+		if (signal?.aborted || choice === undefined) return undefined;
+		if (choice !== searchAllLabel) return folderChoices.sessionsByLabel.get(choice)?.path;
+
+		signal?.throwIfAborted();
+		const allProjects = await api.pi.SessionManager.listAllForPicker();
+		const allSessions = allProjects.complete ? await allProjects.complete : allProjects.sessions;
+		const allChoices = createSessionChoices(filterCurrentSession(allSessions));
+		if (signal?.aborted) return undefined;
+		const allChoice = await ctx.ui.select(
+			"Select a session from all projects",
+			allChoices.options,
+			signal === undefined ? undefined : { signal },
+		);
+		return signal?.aborted || allChoice === undefined ? undefined : allChoices.sessionsByLabel.get(allChoice)?.path;
 	} catch (error) {
 		if (signal?.aborted) return undefined;
 		throw error;

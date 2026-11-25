@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-11-25
 
 ### Breaking Changes
 
@@ -13,7 +13,7 @@
 
 ### Changed
 
-- Allow installation on OMP 19 and newer.
+- Require OMP 19.2.1 or newer; use its searchable extension selector for current-folder and all-project session search instead of importing the removed TUI session-picker overlay.
 - Historical-session consultations reuse OMP's scout wake-turn monitor with terminal `yield` completion per IRC turn; the child remains available for follow-ups sent with the ordinary `write agent://<id>` and `wait` flow.
 
 ### Fixed

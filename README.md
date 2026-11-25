@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- OMP 18.20.3 or newer
+- OMP 19.2.1 or newer
 - Bun 1.4.4 or newer
 
 ## Install
@@ -15,7 +15,7 @@ omp plugin install github:anatoli-tsinovoy/omp-seance
 
 ## Use
 
-1. **Choose a source.** With no arguments, `/seance` opens the native searchable session picker in the current folder. Use arrows and Enter to select, Tab to search all projects, or Esc to cancel.
+1. **Choose a source.** With no arguments, `/seance` opens OMP's searchable selector for sessions in the current folder. Longer lists support type-to-search; choose **Search all projects** to search every project, or Esc to cancel.
 2. **Choose a model.** The native selector defaults to the current main model; the source's recorded historical model is offered when available, and other available models are searchable. The current session and main model remain unchanged.
 3. **Ask or attach.** The native multiline question editor submits with Ctrl+Q or Ctrl+Enter. A blank question attaches an idle consultant; canceling any dialog creates no child.
 
